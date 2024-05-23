@@ -1,0 +1,280 @@
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0, maximum-scale=1.0"
+    />
+    <link rel="manifest" href="./manifest.json" />
+
+    <title>mock-gps</title>
+
+    <script>
+      window.addEventListener("load", function () {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker
+            .register("./sw.mjs")
+            .then(function (registration) {
+              console.log("serviceWorker registed.");
+            })
+            .catch(function (error) {
+              console.warn("serviceWorker error.", error);
+            });
+        }
+      });
+    </script>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/vuetify@3.6.4/dist/vuetify.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3.6.4/dist/vuetify.min.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/@mdi/font@5.x/css/materialdesignicons.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <div class="d-flex justify-center pt-5">
+        <v-card max-width="800px" width="100%" class="px-1 pb-5">
+          <v-toolbar
+            class="my-4"
+            color="secondary"
+            extended
+            title="モック GPS"
+            style="border-radius: 3px 3px 0px 0px"
+          >
+            <template v-slot:extension>
+              <v-tabs v-model="tab" :disabled="loading">
+                <v-tab>
+                  <v-icon>mdi-map-marker</v-icon>
+                  GPS表示</v-tab
+                >
+                <v-tab>
+                  <v-icon>mdi-crosshairs-gps</v-icon>
+                  GPS書き込み</v-tab
+                >
+              </v-tabs>
+            </template>
+          </v-toolbar>
+          <v-window v-model="tab">
+            <v-window-item>
+              <!-- GPS表示 -->
+              <div class="px-3 py-5">
+                <v-select
+                  v-model="busNumber"
+                  :items="[{value: 1,title:'バス1'}, {value: 2,title:'バス2'}]"
+                  :disabled="loading"
+                />
+              </div>
+              <div class="px-3 pb-5">
+                「読み込み」ボタンを押すと直近で書き込み済みのGPS情報を取得します
+              </div>
+              <div class="d-flex justify-end px-3 pb-3">
+                <v-btn color="primary" @click="execRead" :disabled="loading">
+                  <v-icon>mdi-reload</v-icon>
+                  読み込み
+                </v-btn>
+              </div>
+              <div
+                class="d-flex justify-center pt-5"
+                v-for="data of dataset"
+                :key="data.c"
+              >
+                <v-card
+                  max-width="480px"
+                  width="100%"
+                  class="d-flex justify-center"
+                >
+                  <iframe
+                    :key="data.c"
+                    :src="`https://www.google.com/maps/embed/v1/place?key=AIzaSyBG_ReuGLYpDl3EGwVfEsOn608HQ-JJ5Ak&q=${data.y},${data.x}&center=${data.y},${data.x}&zoom=18&maptype=satellite`"
+                    width="100%"
+                    height="320px"
+                    frameborder="0"
+                    marginwidth="0"
+                    marginheight="0"
+                    scrolling="no"
+                  ></iframe>
+                </v-card>
+                <v-card width="180px" class="pa-1">
+                  <div>
+                    バス:<br />
+                    <span class="pl-2 text-blue"> {{ data.b }}</span>
+                  </div>
+                  <div>
+                    緯度:<br />
+                    <span class="pl-2 text-blue"> {{ data.x }}</span>
+                  </div>
+                  <div>
+                    経度:<br />
+                    <span class="pl-2 text-blue"> {{ data.y }}</span>
+                  </div>
+                  <div>
+                    時刻:
+                    <span class="pl-2 text-blue">
+                      {{ new Date(data.c).toLocaleTimeString("ja-JP") }}</span
+                    >
+                  </div>
+                </v-card>
+              </div>
+            </v-window-item>
+            <v-window-item>
+              <!-- GPS書き込み -->
+              <div class="pa-3" v-if="!user">
+                <v-row>
+                  <v-col class="py-5">
+                    ログインすると、GPS情報の書き込みが可能です
+                  </v-col>
+                </v-row>
+                <v-row>
+                  <v-col>
+                    <v-text-field v-model="mail" label="メールアドレス" />
+                  </v-col>
+                </v-row>
+                <v-row>
+                  <v-col>
+                    <v-text-field
+                      v-model="pass"
+                      label="パスワード"
+                      type="password"
+                    />
+                  </v-col>
+                </v-row>
+                <v-row>
+                  <v-col class="d-flex justify-end ga-2">
+                    <v-btn color="primary" @click="execCreate" v-if="false"
+                      >ユーザー新規作成</v-btn
+                    >
+                    <v-btn color="primary" @click="execLogin">ログイン</v-btn>
+                  </v-col>
+                </v-row>
+              </div>
+
+              <div v-if="user">
+                <v-row>
+                  <v-col>
+                    <v-select
+                      v-model="busNumberWriter"
+                      :items="[{value: 1,title:'バス1'}, {value: 2,title:'バス2'}]"
+                      :disabled="writerJob !== null"
+                    />
+                  </v-col>
+                </v-row>
+                <v-row>
+                  <v-col> ログインユーザー: {{ mail }} </v-col>
+                </v-row>
+                <v-row>
+                  <v-col class="pa-3">
+                    <v-btn
+                      v-if="writerJob === null"
+                      @click="start"
+                      color="primary"
+                    >
+                      記録開始
+                    </v-btn>
+                    <v-btn v-else @click="end" color="error"> 記録停止 </v-btn>
+                  </v-col>
+                </v-row>
+              </div>
+            </v-window-item>
+          </v-window>
+        </v-card>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        loginWithEmailPassword,
+        createWithEmailPassword,
+        writeGeoData,
+        readGeoDataset,
+        runWriter,
+      } from "./firebase.mjs";
+
+      const { createApp, ref } = Vue;
+      const { createVuetify } = Vuetify;
+      const vuetify = createVuetify();
+
+      createApp({
+        setup() {
+          const tab = ref(0);
+          const mail = ref("");
+          const pass = ref("");
+          const user = ref(null);
+          const busNumber = ref(1);
+          const busNumberWriter = ref(1);
+          const readerJob = ref(null);
+          const writerJob = ref(null);
+          const loading = ref(false);
+
+          const dataset = ref([]);
+
+          const map = ref(null);
+
+          const execLogin = async () => {
+            try {
+              user.value = await loginWithEmailPassword(mail.value, pass.value);
+              pass.value = "";
+            } catch (e) {
+              alert(e);
+            }
+          };
+
+          const execCreate = async () => {
+            try {
+              user.value = await createWithEmailPassword(
+                mail.value,
+                pass.value
+              );
+              pass.value = "";
+            } catch (e) {
+              alert(e);
+            }
+          };
+
+          const execRead = async () => {
+            loading.value = true;
+            try {
+              dataset.value = await readGeoDataset(busNumber.value);
+            } catch {
+              alert("情報の取得に失敗しました");
+            } finally {
+              loading.value = false;
+            }
+          };
+
+          const start = () => {
+            writerJob.value = runWriter(busNumberWriter.value);
+          };
+          const end = () => {
+            clearInterval(writerJob.value);
+            writerJob.value = null;
+          };
+
+          return {
+            tab,
+            mail,
+            pass,
+            user,
+            busNumber,
+            busNumberWriter,
+            writerJob,
+            dataset,
+            loading,
+            execLogin,
+            execCreate,
+            execRead,
+            start,
+            end,
+          };
+        },
+      })
+        .use(vuetify)
+        .mount("#app");
+    </script>
+  </body>
+</html>
