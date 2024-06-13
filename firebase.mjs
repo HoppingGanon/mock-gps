@@ -36,36 +36,9 @@ const db = getFirestore(app);
 
 const auth = getAuth();
 
-export async function writeUserData(collection, datasetName, data) {
-  if (auth.currentUser) {
-    const userId = auth.currentUser.uid; // 現在ログインしているユーザーのUIDを取得
-    try {
-      // Firestoreのドキュメントを設定します
-      // コレクション'users' -> ドキュメント'userId' -> コレクション'datasets' -> ドキュメント'datasetName'
-      await setDoc(
-        doc(db, "users", userId, collection, datasetName),
-        data, // フィールド'data'に引数'data'の内容を設定
-        {
-          merge: true, // 既存のドキュメントにマージする（フィールドが存在しない場合は新規作成）
-        }
-      );
-      console.log(`${datasetName} へのデータの追加/更新に成功しました。`);
-    } catch (error) {
-      throw `${datasetName} へのデータの追加/更新に失敗しました:`;
-    }
-  } else {
-    throw new Error(
-      "認証されていないユーザーによる書き込みは許可されていません。"
-    );
-  }
-}
-
 export async function writeGeoData(busNumber) {
   if (auth.currentUser) {
     try {
-      // Firestoreのドキュメントを設定します
-      // コレクション'users' -> ドキュメント'userId' -> コレクション'datasets' -> ドキュメント'datasetName'
-
       const geo = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
           resolve,
@@ -75,6 +48,8 @@ export async function writeGeoData(busNumber) {
 
       const id = new Date().getTime();
 
+      // Firestoreのドキュメントを設定します
+      // コレクション'bus' -> ドキュメント'${busNumber}' -> コレクション'geo_data' -> ドキュメント'${current DateTime}'
       await setDoc(
         doc(db, "bus", `${busNumber}`, "geo_data", id.toString()),
         {
@@ -102,45 +77,12 @@ export async function writeGeoData(busNumber) {
   }
 }
 
-export async function createWithEmailPassword(email, password) {
-  return await new Promise((resolve, reject) => {
-    createUserWithEmailAndPassword(auth, email, password)
-      .then((userCredential) => {
-        // メールアドレスとパスワードでのログインが成功した場合の処理
-        const user = userCredential.user;
-        resolve(user);
-      })
-      .catch((error) => {
-        // ログイン処理に失敗した場合の処理
-        console.error("ログインに失敗しました:", error);
-        reject(error);
-      });
-  });
-}
-
 export async function loginWithEmailPassword(email, password) {
   return await new Promise((resolve, reject) => {
     signInWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
         // メールアドレスとパスワードでのログインが成功した場合の処理
         const user = userCredential.user;
-        resolve(user);
-      })
-      .catch((error) => {
-        // ログイン処理に失敗した場合の処理
-        console.error("ログインに失敗しました:", error);
-        reject(error);
-      });
-  });
-}
-
-export async function loginGoogle() {
-  return await new Promise((resolve, reject) => {
-    const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider)
-      .then((result) => {
-        // Googleアカウントでのログインが成功した場合の処理
-        const user = result.user;
         resolve(user);
       })
       .catch((error) => {
@@ -214,4 +156,43 @@ export function runWriter(busNumber, interval = 30000) {
   update();
   job = setInterval(update, interval);
   return job;
+}
+
+// =============== 以下、テスト用関数 ======================================================================================================
+
+/** この関数はGoogleアカウントでログインするときに使用するので、今回は不要 */
+export async function loginGoogle() {
+  return await new Promise((resolve, reject) => {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider)
+      .then((result) => {
+        // Googleアカウントでのログインが成功した場合の処理
+        const user = result.user;
+        resolve(user);
+      })
+      .catch((error) => {
+        // ログイン処理に失敗した場合の処理
+        console.error("ログインに失敗しました:", error);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Firebaseのルールで新たなユーザーをSDKから作成できないように制御しているので、この関数はテスト用
+ */
+export async function createWithEmailPassword(email, password) {
+  return await new Promise((resolve, reject) => {
+    createUserWithEmailAndPassword(auth, email, password)
+      .then((userCredential) => {
+        // メールアドレスとパスワードでのログインが成功した場合の処理
+        const user = userCredential.user;
+        resolve(user);
+      })
+      .catch((error) => {
+        // ログイン処理に失敗した場合の処理
+        console.error("ログインに失敗しました:", error);
+        reject(error);
+      });
+  });
 }
